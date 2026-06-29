@@ -1,0 +1,4 @@
+// infoooooouuu uwu
+
+Raylib v.6.0.0
+Zig v.0.16.0
