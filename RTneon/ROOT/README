@@ -1,0 +1,2 @@
+This is the emulators FileSystem. Everything in ROOT/ is the beginning of the region.
+commonly, BLOCKDEVICE0 is for Vortexes.
