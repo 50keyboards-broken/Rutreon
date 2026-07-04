@@ -1,4 +1,5 @@
 // infoooooouuu uwu
 
+You need these dependancies to Build the emulator yourself
 Raylib v.6.0.0
 Zig v.0.16.0
