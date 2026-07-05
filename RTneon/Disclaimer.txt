@@ -1,0 +1,13 @@
+Heres whats missing in the current emulator:
+Storage to file writing {All types of storage(00r) arent persistent yet.}
+Port System + port gui tab
+OUTRA (emulator gpu)
+PACE CONFMECO doesnt work yet.
+XPRT is.. being worked on..
+LIVEBLOCK........ uh,,,,,,,,,,,, no LIVEBLOCK yet..... still... idk if ill make it ... uh.... yeah... (the memory region still acts as RMEM bank2.)
+
+
+I have no idea how the memory share channel would work... so itll probably be scrapped.. + right now does nothing.
+timing isnt accurate to hardware...
+
+Im fully aware of how terrible the gui scaling is.. so.. if your on 1440p or 720p.... im sorry.
