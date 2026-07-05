@@ -43,7 +43,7 @@ anynamehere.VXBOOT = Emulator Boot - PACE INSTRUCTIONS
 | 0       | NOP         | ^%        |                 |                                                             |          |                                                    |
 | 1       | WRITEGLOBAL | 12B/D     | 00r0000000000   |                                                             | WRTE     | TYTE                                               |
 | 10      | READGLOBAL  | 12B/D     | 00r0000000000   |                                                             | READ     | SRVC \| ADDR TYTE                                  |
-| 11      | MECO        | 12B/D     | 00r0000000000   |                                                             | MECO     | SRVC \| AD TYTE                                    |
+| 11      | MECO        | 12B/D     | 00r0000000000   | Starting MECO is \*r\*t [111111110000]                      | MECO     | SRVC \| AD TYTE                                    |
 | 100     | MECO-VARI   | 4B/V      | t0000           | Can be called before an arithmetic Operation for 2nd input. | VMEC     | 1UC \| 1 IMPORT \| 4CA \| 4VAR                     |
 | 101     | XPRT        | 12B/X     | 00r00-0000t0000 |                                                             | XPRT     | SRWI \| T#VP \| 4CA \| 4CA                         |
 | 110     | ARITHMETIC  | 12B/A     | 00r0000000000   | Result Stored in Output Variable (1111) OR Highest Value    | ARTH     | +-LR \| DATA TYTE                                  |
