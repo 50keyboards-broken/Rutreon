@@ -37,6 +37,7 @@ const ThreadUnit = struct {
     YEILDtype: u2 = 0,
     YEILDval: u10 = 0,
     EMTUID: u3 = 0,
+    EMUNITSKIP: bool = false,
     EMUNITCYCLES: usize = 0,
     EMUNITLASTCYCLED: bool = false,
     EMPREVIOUSIBUSr: u5 = 0
@@ -69,6 +70,8 @@ var VMEM: [1024]u10 = .{0} ** 1024;
 var SimulatethisTU: usize = 0;
 var CyclesSimulated: usize = 0;
 var simulatelockbool: bool = false;
+var simulationStopbool: bool = false;
+var LockoutCounter: usize = 0; // if all cores wait for too long.
 
 fn inity() void {
     rl.SetConfigFlags(rl.FLAG_WINDOW_RESIZABLE);
@@ -154,9 +157,15 @@ pub fn main(init: std.process.Init) !void {
                 }
             }
         }
+        if (LockoutCounter >= 120) {
+            simulatelockbool = false;
+            simulationStopbool = true;
+            EMTOOLGUImessage("TU LOCKOUT RESCUE ", CyclesSimulated);
+            LockoutCounter = 0;
+        }
         if (simulatelockbool) {
             switch (simulationbool) {
-                true => {AIM(IOobject, 248832);}, // 248832 cycles per frame :3
+                true => {AIM(IOobject, 1);}, // 248832 cycles per frame :3
                 false => {
                     const thissecond = rl.GetTime();
                     if (thissecond - lastsecond >= 1.0) {
@@ -212,7 +221,7 @@ fn EMGUIcoreswitcher() void {
 
     const coretext = std.fmt.bufPrint(&buf, "A <[ {d} ]> D", .{currentcoretab}) catch unreachable;
     buf[coretext.len] = 0;
-    rl.DrawText(coretext.ptr, @divTrunc(livescrnsizew, 2)-rl.MeasureText(coretext.ptr, 20), livescrnsizeh-40, 20, rl.WHITE);
+    rl.DrawText(coretext.ptr, @divTrunc(livescrnsizew, 2)-@divTrunc(rl.MeasureText(coretext.ptr, 20),2), livescrnsizeh-40, 20, rl.WHITE);
 }
 const STRUCTEMGUICORE = struct {x: f32, y: f32, core: *ThreadUnit};
 fn EMGUIcoredrawer(lock: STRUCTEMGUICORE) void {
@@ -224,7 +233,12 @@ fn EMGUIcoredrawer(lock: STRUCTEMGUICORE) void {
     contentstext = std.fmt.bufPrintZ(buf[0..], "EON ID: {d}  -  VXID: {d}  @  {d}       ", .{lock.core.EMTUID, lock.core.VXID, lock.core.VRTXpointer}) catch unreachable;
     rl.DrawRectangleRounded(rect, 0.05, 3, rl.Color{ .r = 67, .g = 74, .b = 84, .a = 255 }); // background rect
     switch (lock.core.EMUNITLASTCYCLED) {
-        true => {rl.DrawRectangleRoundedLinesEx(rect, 0.05, 10, 2, rl.PURPLE);},
+        true => {
+            switch (lock.core.EMUNITSKIP) {
+                true => {rl.DrawRectangleRoundedLinesEx(rect, 0.05, 10, 2, rl.ORANGE);},
+                false => {rl.DrawRectangleRoundedLinesEx(rect, 0.05, 10, 2, rl.PURPLE);}
+            }
+        },
         false => {rl.DrawRectangleRoundedLinesEx(rect, 0.05, 10, 2, rl.Color{.r = 0x3D, .g = 0x44, .b = 0x4E, .a = 255});}
     }
     rl.DrawTextEx(global_font, contentstext.ptr, .{.x = lock.x + (((livescrnsizewf-1300) - @as(f32, @floatFromInt(rl.MeasureText(contentstext.ptr, 30)))) / 2), .y = lock.y}, 30, 1, rl.WHITE); // rect title
@@ -238,8 +252,30 @@ fn EMGUIcoredrawer(lock: STRUCTEMGUICORE) void {
         contentstext = std.fmt.bufPrintZ(buf[0..], "Current: UNDF ({X})", .{lastibus}) catch unreachable;
     }
     rl.DrawTextEx(global_font, contentstext.ptr, .{.x = textoffset, .y = lock.y+80}, 30, 1, rl.WHITE);
-    contentstext = std.fmt.bufPrintZ(buf[0..], "Status: {d}", .{lock.core.YEILDtype}) catch unreachable;
-    rl.DrawTextEx(global_font, contentstext.ptr, .{.x = textoffset, .y = lock.y+120}, 30, 1, rl.WHITE);
+    var YeildTextType: []u8 = undefined;
+    if (lock.core.EMUNITSKIP) {
+        switch (lock.core.YEILDtype) {
+            0b00 => { // cycle waiting
+                YeildTextType = std.fmt.bufPrintZ(buf[0..], "Status: Cycle Waiting: {d}", .{lock.core.YEILDval}) catch unreachable;
+            },
+            0b01 => { //port waiting
+                YeildTextType = std.fmt.bufPrintZ(buf[0..], "Status: Waiting on PortID: {d}", .{lock.core.YEILDval}) catch unreachable;
+            },
+            0b10 => { //flag waiting
+                if (yield_flags[@truncate(lock.core.YEILDval)] == false) {
+                    YeildTextType = std.fmt.bufPrintZ(buf[0..], "Status: Waiting on FlagID: {d}", .{lock.core.YEILDval}) catch unreachable;
+                } else {
+                    YeildTextType = std.fmt.bufPrintZ(buf[0..], "Status: Running", .{}) catch unreachable;
+                }
+            },
+            0b11 => { //XPRT waiting
+                YeildTextType = std.fmt.bufPrintZ(buf[0..], "Status: Waiting for PKT", .{}) catch unreachable;
+            }
+        }
+    } else {
+        YeildTextType = std.fmt.bufPrintZ(buf[0..], "Status: Running", .{}) catch unreachable;
+    }
+    rl.DrawTextEx(global_font, YeildTextType.ptr, .{.x = textoffset, .y = lock.y+120}, 30, 1, rl.WHITE);
 }
 
 fn EMGUI() void {
@@ -290,7 +326,7 @@ fn EMGUItab_OVERVIEW() void {
     }
     rl.DrawRectangle(10, livescrnsizeh-300, livescrnsizew-20, 290, rl.Color{.r = 37, .g = 44, .b = 57, .a = 200});
     rl.DrawLineBezier(.{.x = 10, .y = livescrnsizehf-300}, .{.x = livescrnsizewf-10, .y = livescrnsizehf-300},10, rl.Color{.r = 0x3D, .g = 0x44, .b = 0x4E, .a = 255});
-    const TimingScheme = "[Z] Step   |   [X] Global Step   |   [R] AIM RunHz  |   [T] AIM 1Hz";
+    const TimingScheme = "[Q]Reboot   |   [Z] Step   |   [X] Global Step   |   [R] AIM RunHz  |   [T] AIM 1Hz   |   [H]RunHz Mode";
     rl.DrawTextEx(global_font, TimingScheme, .{.x = (livescrnsizewf/2) - (rl.MeasureTextEx(global_font, TimingScheme, 20, 1).x/2), .y = livescrnsizehf-290}, 20, 1, rl.PURPLE);
     var EntryY: f32 = livescrnsizehf-290;
     var i: usize = logsheader;
@@ -631,11 +667,12 @@ fn controlunit(IOobject: anytype, core: *ThreadUnit) void {
         }
     }
     switch (core.YEILDtype) {
-        0b00 => {if (core.YEILDval > 0) {core.YEILDval -= 1; return;}},
+        0b00 => {if (core.YEILDval > 0) {core.YEILDval -= 1; core.EMUNITSKIP = true; return;}},
         0b01 => {return;}, //no port stuff exists yet
-        0b10 => {if (yield_flags[@truncate(core.YEILDval)] == false) {return;}},
-        0b11 => {if (core.YEILDval == 1) {return;}}
+        0b10 => {if (yield_flags[@truncate(core.YEILDval)] == false) {core.EMUNITSKIP = true; return;}},
+        0b11 => {if (core.YEILDval == 1) {core.EMUNITSKIP = true; return;}}
     }
+    core.EMUNITSKIP = false;
     const ibus = core.VRTX[core.VRTXpointer];
     switch (ibus.r) {
         0b0000 => {NOP(core);},
@@ -655,7 +692,10 @@ fn controlunit(IOobject: anytype, core: *ThreadUnit) void {
         0b1110 => {EM_UNIMP(core);},
         0b1111 => {EM_UNIMP(core);},
         0b11110 => {STOP(core);},
-        else => {}
+        else => {
+            EMTOOLGUImessage("INVALID OPCODE TUID= ", core.EMTUID);
+            EMTOOLpushLog("OPCODE: {d}", .{ibus.r});
+        }
     }
     core.EMPREVIOUSIBUSr = ibus.r;
     core.VRTXpointer += 1;
@@ -664,10 +704,11 @@ fn controlunit(IOobject: anytype, core: *ThreadUnit) void {
 var LastSimulated: usize = 0;
 pub fn AIM(IOobject: anytype, Steps: usize) void{
     for (0..Steps) |_| {
-        if (!simulatelockbool) break;
+        if (simulationStopbool) break;
         EMthreads[LastSimulated].EMUNITLASTCYCLED = false;
         controlunit(IOobject, &EMthreads[SimulatethisTU]);
         EMthreads[SimulatethisTU].EMUNITLASTCYCLED = true;
+        if (EMthreads[SimulatethisTU].EMUNITSKIP) LockoutCounter += 1;
         LastSimulated = SimulatethisTU;
         SimulatethisTU = (SimulatethisTU + 1) % EMthreads.len;
         CyclesSimulated += 1;
@@ -900,6 +941,7 @@ fn STOP(core: *ThreadUnit) void{
     EMTOOLGUImessage("STOP CALLED TUID=", core.EMTUID);
     EMTOOLGUImessage("Emulated Cycles : ", CyclesSimulated);
     EMTOOLGUImessage("TU Cycles : ", core.EMUNITCYCLES);
+    simulationStopbool = true;
     simulatelockbool = false;
 }
 fn EMTOOLpushLog(comptime msg: []const u8, args: anytype) void {
