@@ -21,14 +21,15 @@ const unitflags = struct {
 };
 const ThreadUnit = struct {
     COval: u10 = 0,
-    COregion: u2 = 0,
-    COaddr: u10 = 0,
+    COregion: u2 = 0b11,
+    COaddr: u10 = 0b1111110000,
     COfocus: bool = false, // false = MECO, true = VMEC
     TMUReturnhandle: u10 =  0,
     VRTXpointer: u4 = 0,
     VXID: u5 = 0,
     VRTX: [12]EMSTRUCTION = [_]EMSTRUCTION{.{.r = 0b10000, .t = 0}} ** 12,
     CACHE: [16]u10 = [_]u10{0} ** 16,
+    XPKT: [8]u10 = [_]u10{0} ** 8,
     VARS: [16]u10 = [_]u10{0} ** 16,
     VARaddr: u4 = 0,
     UNITCONF: u8 = 0,
@@ -38,7 +39,7 @@ const ThreadUnit = struct {
     EMTUID: u3 = 0,
     EMUNITCYCLES: usize = 0,
     EMUNITLASTCYCLED: bool = false,
-    EMPREVIOUSPOINTER: u4 = 0
+    EMPREVIOUSIBUSr: u5 = 0
 };
 fn EMsummonunit() void {
     for (0..6) |i| {
@@ -155,7 +156,7 @@ pub fn main(init: std.process.Init) !void {
         }
         if (simulatelockbool) {
             switch (simulationbool) {
-                true => {AIM(IOobject, 6);},
+                true => {AIM(IOobject, 248832);}, // 248832 cycles per frame :3
                 false => {
                     const thissecond = rl.GetTime();
                     if (thissecond - lastsecond >= 1.0) {
@@ -182,7 +183,7 @@ fn EMGUImemorytable(lock: STRUCTEMGUITABLE) void {
     var memcount: usize = lock.addr;
     const endaddrview = @min(lock.addr + (lock.col*lock.row), lock.input.len);
     rl.DrawRectangleRounded(rect, 0.05, 3, rl.Color{ .r = 67, .g = 74, .b = 84, .a = 255 });
-    rl.DrawRectangleRoundedLinesEx(rect, 0.05, 10, 2, rl.Color{.r = 0x3D, .g = 0x44, .b = 0x4E, .a = 255});
+    rl.DrawRectangleRoundedLinesEx(rect, 0.05, 10, 3, rl.Color{.r = 0x3D, .g = 0x44, .b = 0x4E, .a = 255});
     for (lock.input[lock.addr..endaddrview]) |val| {
         hexvalue = std.fmt.bufPrint(buf[0..], "{X:0>3}", .{val}) catch unreachable;
         buf[hexvalue.len] = 0;
@@ -218,7 +219,7 @@ fn EMGUIcoredrawer(lock: STRUCTEMGUICORE) void {
     var buf: [64]u8 = undefined;
     var contentstext: []u8 = undefined;
     const textoffset: f32 = lock.x + 15; //repetive use
-    const lastibus = lock.core.VRTX[lock.core.EMPREVIOUSPOINTER];
+    const lastibus = lock.core.EMPREVIOUSIBUSr;
     const rect = rl.Rectangle{.x = lock.x, .y = lock.y, .height = livescrnsizehf-700, .width = livescrnsizewf-1350};
     contentstext = std.fmt.bufPrintZ(buf[0..], "EON ID: {d}  -  VXID: {d}  @  {d}       ", .{lock.core.EMTUID, lock.core.VXID, lock.core.VRTXpointer}) catch unreachable;
     rl.DrawRectangleRounded(rect, 0.05, 3, rl.Color{ .r = 67, .g = 74, .b = 84, .a = 255 }); // background rect
@@ -229,12 +230,12 @@ fn EMGUIcoredrawer(lock: STRUCTEMGUICORE) void {
     rl.DrawTextEx(global_font, contentstext.ptr, .{.x = lock.x + (((livescrnsizewf-1300) - @as(f32, @floatFromInt(rl.MeasureText(contentstext.ptr, 30)))) / 2), .y = lock.y}, 30, 1, rl.WHITE); // rect title
     contentstext = std.fmt.bufPrintZ(buf[0..], "MECO: {b:0>2}r{b:0>10}", .{lock.core.COregion, lock.core.COaddr}) catch unreachable;
     rl.DrawTextEx(global_font, contentstext.ptr, .{.x = textoffset, .y = lock.y+40}, 30, 1, rl.WHITE);
-    if (lastibus.r < 15) {
-        contentstext = std.fmt.bufPrintZ(buf[0..], "Current: {b:0>4}", .{lastibus.r}) catch unreachable;
-    } else if (lastibus.r == 0b11110) {
-        contentstext = std.fmt.bufPrintZ(buf[0..], "Current: STOP ({X})", .{lastibus.r}) catch unreachable;
+    if (lastibus < 15) {
+        contentstext = std.fmt.bufPrintZ(buf[0..], "Current: {b:0>4}", .{lastibus}) catch unreachable;
+    } else if (lastibus == 0b11110) {
+        contentstext = std.fmt.bufPrintZ(buf[0..], "Current: STOP ({X})", .{lastibus}) catch unreachable;
     } else {
-        contentstext = std.fmt.bufPrintZ(buf[0..], "Current: UNDF ({X})", .{lastibus.r}) catch unreachable;
+        contentstext = std.fmt.bufPrintZ(buf[0..], "Current: UNDF ({X})", .{lastibus}) catch unreachable;
     }
     rl.DrawTextEx(global_font, contentstext.ptr, .{.x = textoffset, .y = lock.y+80}, 30, 1, rl.WHITE);
     contentstext = std.fmt.bufPrintZ(buf[0..], "Status: {d}", .{lock.core.YEILDtype}) catch unreachable;
@@ -407,7 +408,7 @@ fn FindrunVXBOOT(IOobject: anytype) !void {
         e: u12,
     };
     var VXBOOTED: [64]EMPACESTRUCTION = undefined;
-    var rootdir: std.Io.Dir  = std.Io.Dir.cwd().openDir(IOobject, "ROOT/", .{.iterate = true}) catch {EMTOOLGUImessage("PACE READ ERR : ", CyclesSimulated); return;};
+    var rootdir: std.Io.Dir  = std.Io.Dir.cwd().openDir(IOobject, "ROOT/", .{.iterate = true}) catch {EMTOOLGUImessage("PACE: READ ERR : ", CyclesSimulated); return;};
     defer rootdir.close(IOobject);
     var rootiterate = rootdir.iterate();
     var buf: [128]u8 = undefined;
@@ -556,7 +557,7 @@ fn RSM(IOobject: anytype, core: *ThreadUnit, lock: RSMobject) void {
             }
         },
         false => {
-            core.VRTX = GetVRTX(IOobject, lock.Request.VXID) catch {EMTOOLGUImessage("RSM FETCH FAIL", CyclesSimulated); return;};
+            core.VRTX = GetVRTX(IOobject, lock.Request.VXID) catch {EMTOOLGUImessage("RSM: FETCH FAIL", CyclesSimulated); return;};
             core.VXID = lock.Request.VXID;
         }
     }
@@ -576,7 +577,7 @@ fn TMU_RMEM_MUX(core: *ThreadUnit, lock:RMEMobject) void {
         2 => {
             switch (lock.DataAddress) {
                 0b0...0b1111011111 => {if (action) {RMEMbank2[lock.DataAddress] = lock.DataValue;} else {core.TMUReturnhandle = RMEMbank2[lock.DataAddress];}},
-                //0b1111100000...0b1111101111 => {if (action) {core.VRTX[bit4addr] = @intCast(lock.DataValue);} else {core.TMUReturnhandle = @intCast(core.VRTX[bit4addr]);}},
+                //0b1111100000...0b1111101110 => {if (action) {core.VRTX[bit4addr] = @intCast(lock.DataValue);} else {core.TMUReturnhandle = @intCast(core.VRTX[bit4addr]);}},
                 0b1111110000...0b1111111111 => {if (action) {core.CACHE[bit4addr] = lock.DataValue;} else {core.TMUReturnhandle = core.CACHE[bit4addr];}},
                 else => {return;}
             }
@@ -619,11 +620,10 @@ fn TMU(IOobject: anytype, core: *ThreadUnit, lock: MEMobject) void {
     }
 }
 fn controlunit(IOobject: anytype, core: *ThreadUnit) void {
-    if (core.VRTXpointer == 11) {
+    if (core.VRTXpointer == 12) {
         core.VRTXpointer = 0;
         if ((core.UNITCONF & 0b00000001) == 1) {
-            //afterguistep -- "TU# VRTX LOOPED"
-            return;
+            EMTOOLGUImessage("VRTX LOOPED TUID=", core.EMTUID);
         } else {
             core.VXID = (core.VXID + 1) % 31;
             RSM(IOobject, core, .{.Request = .{.VXID = core.VXID}, .MEMobject = .{}});
@@ -634,7 +634,7 @@ fn controlunit(IOobject: anytype, core: *ThreadUnit) void {
         0b00 => {if (core.YEILDval > 0) {core.YEILDval -= 1; return;}},
         0b01 => {return;}, //no port stuff exists yet
         0b10 => {if (yield_flags[@truncate(core.YEILDval)] == false) {return;}},
-        else => {return;}
+        0b11 => {if (core.YEILDval == 1) {return;}}
     }
     const ibus = core.VRTX[core.VRTXpointer];
     switch (ibus.r) {
@@ -643,7 +643,7 @@ fn controlunit(IOobject: anytype, core: *ThreadUnit) void {
         0b0010 => {READGLOBAL(IOobject, core, ibus.t);},
         0b0011 => {MECO(IOobject, core, ibus.t);},
         0b0100 => {VMEC(IOobject, core, ibus.t);},
-        0b0101 => {EM_UNIMP(core);},
+        0b0101 => {XPRT(core, ibus.t);},
         0b0110 => {Arithmetic(core, ibus.t);},
         0b0111 => {CArithmetic(core, ibus.t);},
         0b1000 => {Logic(core, ibus.t);},
@@ -657,19 +657,20 @@ fn controlunit(IOobject: anytype, core: *ThreadUnit) void {
         0b11110 => {STOP(core);},
         else => {}
     }
-    core.EMPREVIOUSPOINTER = core.VRTXpointer;
+    core.EMPREVIOUSIBUSr = ibus.r;
     core.VRTXpointer += 1;
     core.EMUNITCYCLES +=1;
 }
 var LastSimulated: usize = 0;
 pub fn AIM(IOobject: anytype, Steps: usize) void{
     for (0..Steps) |_| {
+        if (!simulatelockbool) break;
         EMthreads[LastSimulated].EMUNITLASTCYCLED = false;
         controlunit(IOobject, &EMthreads[SimulatethisTU]);
-        SimulatethisTU = (SimulatethisTU + 1) % EMthreads.len;
-        CyclesSimulated += 1;
         EMthreads[SimulatethisTU].EMUNITLASTCYCLED = true;
         LastSimulated = SimulatethisTU;
+        SimulatethisTU = (SimulatethisTU + 1) % EMthreads.len;
+        CyclesSimulated += 1;
     }
 }
 //Rutneon Instructions:
@@ -711,7 +712,62 @@ fn VMEC(IOobject: anytype, core: *ThreadUnit, Operand: u12) void {
         else => {EMTOOLGUImessage("ERR INVALID VMEC OPT TUID=", core.EMTUID);}
     }
 }
-//XPRT goes here. TODO
+fn XPRT(core: *ThreadUnit, Operand: u12) void {
+    const channel: u2 = @truncate(Operand >> 10);
+    switch (channel) {
+        0b00 => { // send pkt
+            const Cstarting: u4 = @truncate(Operand >> 4);
+            const Cendingu4: u4 = @truncate(Operand);
+            const Cending: usize = @intCast(Cendingu4);
+            if (Cending <= Cstarting) {EMTOOLGUImessage("TU: INVALID XPRT RANGE TUID=", core.EMTUID); return;}
+            if (Cending - Cstarting > 8) {EMTOOLGUImessage("TU: XPRT SIZE EXCEEDS MAX SIZE TUID= ", core.EMTUID); return;}
+            const Xending: u4 = Cendingu4 - Cstarting;
+            const bus: u2 = @truncate(Operand >> 8);
+            for (Cstarting..Cending+1, 0..) |CIndex, XIndex| {
+                core.XPKT[XIndex] = core.CACHE[CIndex];
+            }
+            switch (bus) {
+                0b00 => { // thread share
+                    const DestinationTUID: u3 = @truncate(core.XPKT[Xending]);
+                    const DestinationTU: *ThreadUnit = &EMthreads[DestinationTUID];
+                    for (core.XPKT, 0..) |Data ,Xindex| {
+                        DestinationTU.XPKT[Xindex] = Data;
+                    }
+                    if (DestinationTU.YEILDtype == 0b11) {DestinationTU.YEILDval = 0; DestinationTU.YEILDtype = 0b00;}
+                },
+                0b01 => { // vram share
+                    var VRAMDestination: u10 = core.XPKT[Xending];
+                    for (core.XPKT) |Data| {
+                        VMEM[VRAMDestination] = Data;
+                        VRAMDestination +%= 1;
+                    }
+                },
+                0b10 => { // port share
+                    // no port stuff exists still. TODO
+                    return;
+                },
+                else => {return;}
+            }
+        },
+        0b01 => { // read directly from pkt
+            const XPKTaddr: u4 = @truncate(Operand);
+            const CO: u12 = (@as(u12, core.COregion) << 10) | (@as(u12, core.COaddr));
+            TMU(undefined, core, .{.DataAction = true, .DataAddress = CO, .DataValue = core.XPKT[XPKTaddr]});
+            EMCOvalUpdate(undefined, core, CO);
+        },
+        0b10 => {// wait for pkt
+            core.YEILDtype = 0b11;
+            core.YEILDval = 1;
+        },
+        0b11 => {// import pkt
+            var Cstarting: u4 = @truncate(Operand);
+            for (core.XPKT) |Data| {
+                core.CACHE[Cstarting] = Data;
+                Cstarting +%= 1;
+            }
+        }
+    }
+}
 fn Arithmetic(core: *ThreadUnit, Operand: u12) void {
     const channel: u2 = @truncate(Operand >> 10);
     const tyte: u10 = @truncate(Operand);
@@ -790,7 +846,7 @@ fn Jump(IOobject: anytype, core: *ThreadUnit, Operand: u12) void {
 fn SLEEP(core: *ThreadUnit, Operand: u12) void{
     const channel: u2 = @truncate(Operand >> 10);
     switch (channel) {
-        0b00 => {core.YEILDval = @truncate(Operand);}, // cycle yeild
+        0b00 => {core.YEILDtype = 0b00; core.YEILDval = @truncate(Operand);}, // cycle yeild
         0b01 => {core.YEILDtype = 0b01;}, // port yeild... no port stuff exists still
         0b10 => {core.YEILDtype = 0b10; core.YEILDval = @truncate(Operand);}, // flag yeild
         0b11 => { // setting flags
@@ -803,7 +859,7 @@ fn SLEEP(core: *ThreadUnit, Operand: u12) void{
 fn EM_UNIMP(core: *ThreadUnit) void {
     var buf: [64]u8 = undefined;
     const message = std.fmt.bufPrintZ(buf[0..], "TU[{d}]: UNIMP STRUCTION", .{core.EMTUID}) catch unreachable;
-    EMTOOLGUImessage(message, core.EMTUID);
+    EMTOOLGUImessage(message, CyclesSimulated);
 }
 fn EMCOvalUpdate(IOobject: anytype, core: *ThreadUnit, bit12addr: u12) void{
     const CO: u12 = (@as(u12, core.COregion) << 10) | (@as(u12, core.COaddr));
