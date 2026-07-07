@@ -49,6 +49,13 @@ fn EMsummonunit() void {
         };
     }
 }
+fn EMresetunits() void {
+    for (&EMthreads, 0..) |*thread, i| {
+        thread.* = ThreadUnit{
+            .EMTUID = @intCast(i),
+        };
+    }
+}
 // gui vars
 var monh: i32 = 0;
 var monw: i32 = 0;
@@ -72,6 +79,9 @@ var CyclesSimulated: usize = 0;
 var simulatelockbool: bool = false;
 var simulationStopbool: bool = false;
 var LockoutCounter: usize = 0; // if all cores wait for too long.
+var RunHzSteps = [_]usize{
+   1, 2, 3, 6, 12, 24, 48, 96, 248832
+};
 
 fn inity() void {
     rl.SetConfigFlags(rl.FLAG_WINDOW_RESIZABLE);
@@ -92,11 +102,10 @@ fn inity() void {
 pub fn main(init: std.process.Init) !void {
     inity();
     EMsummonunit();
-    RMEMbank1[150] = 1002; // remove these two tho..
-    RMEMbank2[991] = 69;
-    EMthreads[0].EMUNITLASTCYCLED = true; // dont remove this.. its for gui clarity lol
     const IOobject = init.io;
     var simulationbool: bool = false;
+    var RunMode: usize = 0;
+    var runHz: usize = 1;
     var lastsecond: f64 = 0;
     try FindrunVXBOOT(IOobject);
     while (!rl.WindowShouldClose()) {
@@ -157,20 +166,53 @@ pub fn main(init: std.process.Init) !void {
                 }
             }
         }
+        if (rl.IsKeyPressed(rl.KEY_H)) {
+            switch (simulatelockbool) {
+                true => {EMTOOLGUImessage("Cant change modes when AIM is running. @ ", CyclesSimulated);},
+                false => {
+                    if (RunMode >= RunHzSteps.len) {RunMode = 0;}
+                    runHz = RunHzSteps[RunMode];
+                    RunMode += 1;
+                    EMTOOLGUImessage("RunHz", runHz);
+                }
+            }
+        }
         if (LockoutCounter >= 120) {
             simulatelockbool = false;
             simulationStopbool = true;
-            EMTOOLGUImessage("TU LOCKOUT RESCUE ", CyclesSimulated);
+            EMTOOLGUImessage("TU LOCKOUT RESCUE : ", CyclesSimulated);
             LockoutCounter = 0;
         }
         if (simulatelockbool) {
             switch (simulationbool) {
-                true => {AIM(IOobject, 1);}, // 248832 cycles per frame :3
+                true => {AIM(IOobject, runHz);},
                 false => {
                     const thissecond = rl.GetTime();
                     if (thissecond - lastsecond >= 1.0) {
                         AIM(IOobject, 1);
                         lastsecond = thissecond;
+                    }
+                }
+            }
+        }
+        if (rl.IsKeyPressed(rl.KEY_Q)) {
+            switch (simulatelockbool) {
+                true => {EMTOOLGUImessage("Cannot Restart when AIM is running. @ ", CyclesSimulated);},
+                false => {
+                    if (simulationStopbool) {
+                        EMresetunits();
+                        try FindrunVXBOOT(IOobject);
+                        yield_flags = .{false}**16;
+                        Storage = .{0} ** 1024;
+                        RMEMbank1 = .{0} ** 1024;
+                        RMEMbank2 = .{0} ** 992;
+                        VMEM = .{0} ** 1024;
+                        SimulatethisTU = 0;
+                        CyclesSimulated = 0;
+                        simulatelockbool = false;
+                        simulationStopbool = false;
+                        LockoutCounter = 0;
+                        EMTOOLGUImessage("Restarted Successfully. @", CyclesSimulated);
                     }
                 }
             }
@@ -279,7 +321,7 @@ fn EMGUIcoredrawer(lock: STRUCTEMGUICORE) void {
 }
 
 fn EMGUI() void {
-    const tabs = [_][*c]const u8{ "[ Overview ]", "[ Core ]", "[ RMEM ]", "[ Rutneon RawTrytes ]", "[ OUTRA ]" };
+    const tabs = [_][*c]const u8{ "[ Overview ]", "[ Core ]", "[ RMEM ]", "[ Ports ]", "[ OUTRA ]" };
     var tabwidth: i32 = 0;
     var coretabwidth: i32 = 0;
 
@@ -327,7 +369,9 @@ fn EMGUItab_OVERVIEW() void {
     rl.DrawRectangle(10, livescrnsizeh-300, livescrnsizew-20, 290, rl.Color{.r = 37, .g = 44, .b = 57, .a = 200});
     rl.DrawLineBezier(.{.x = 10, .y = livescrnsizehf-300}, .{.x = livescrnsizewf-10, .y = livescrnsizehf-300},10, rl.Color{.r = 0x3D, .g = 0x44, .b = 0x4E, .a = 255});
     const TimingScheme = "[Q]Reboot   |   [Z] Step   |   [X] Global Step   |   [R] AIM RunHz  |   [T] AIM 1Hz   |   [H]RunHz Mode";
-    rl.DrawTextEx(global_font, TimingScheme, .{.x = (livescrnsizewf/2) - (rl.MeasureTextEx(global_font, TimingScheme, 20, 1).x/2), .y = livescrnsizehf-290}, 20, 1, rl.PURPLE);
+    const TimingMeasured = rl.MeasureTextEx(global_font, TimingScheme, 20, 1);
+    const barx = (livescrnsizewf/2) - TimingMeasured.x/2;
+    const bary =  livescrnsizehf-290;
     var EntryY: f32 = livescrnsizehf-290;
     var i: usize = logsheader;
 
@@ -346,6 +390,8 @@ fn EMGUItab_OVERVIEW() void {
 
         i = (i + 1) % logs.len;
     }
+    rl.DrawRectangleRounded(.{.x = barx-12, .y = bary-1, .height = TimingMeasured.y+2, .width = TimingMeasured.x+24}, 1, 10, rl.Color{.r = 37, .g = 44, .b = 57, .a = 230});
+    rl.DrawTextEx(global_font, TimingScheme, .{.x = barx, .y = bary}, 20, 1, rl.PURPLE);
 }
 fn EMGUItab_CORE() void {
     var buf: [64]u8 = undefined;
@@ -497,6 +543,9 @@ fn FindrunVXBOOT(IOobject: anytype) !void {
                     0b000000 => {
                         EMTOOLpushLog("PACE: 'ROOT/{s}' Booted :3", .{dirContent.name});
                         print("PACE: 'ROOT/{s}' Booted :3\n", .{dirContent.name});
+                        var windowtitle: [128]u8 = undefined;
+                        _ = std.fmt.bufPrintZ(&windowtitle, "RUTNEON: {s}", .{dirContent.name}) catch unreachable;
+                        rl.SetWindowTitle(&windowtitle);
                         return;
                     },
                     0b010000 => {
@@ -708,7 +757,7 @@ pub fn AIM(IOobject: anytype, Steps: usize) void{
         EMthreads[LastSimulated].EMUNITLASTCYCLED = false;
         controlunit(IOobject, &EMthreads[SimulatethisTU]);
         EMthreads[SimulatethisTU].EMUNITLASTCYCLED = true;
-        if (EMthreads[SimulatethisTU].EMUNITSKIP) LockoutCounter += 1;
+        if (EMthreads[SimulatethisTU].EMUNITSKIP) {LockoutCounter += 1;} else {LockoutCounter = 0;}
         LastSimulated = SimulatethisTU;
         SimulatethisTU = (SimulatethisTU + 1) % EMthreads.len;
         CyclesSimulated += 1;
