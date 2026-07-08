@@ -796,7 +796,8 @@ fn VMEC(IOobject: anytype, core: *ThreadUnit, Operand: u12) void {
         },
         0b01 => {
             const cacheaddr: u10 = @truncate(Operand >> 4);
-            TMU_RMEM_MUX(core, .{.RMEMbank = 2, .DataAction = true, .DataAddress = (cacheaddr | 0b1111110000), .DataValue = core.VARS[15]});
+            const VARaddr: u4 = @truncate(Operand );
+            TMU_RMEM_MUX(core, .{.RMEMbank = 2, .DataAction = true, .DataAddress = (cacheaddr | 0b1111110000), .DataValue = core.VARS[VARaddr]});
             EMCOvalUpdate(IOobject, core, Operand);
         },
         else => {EMTOOLGUImessage("ERR INVALID VMEC OPT TUID=", core.EMTUID);}
