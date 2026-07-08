@@ -41,7 +41,7 @@ anynamehere.VXBOOT = Emulator Boot - PACE INSTRUCTIONS
 |           XPRT           | USAGE: XPRT r00,0011t0110 =<br>comma for clarity.                                                                                                      | SEND BUS:THREADSHARE Cache0011 to Cache0110                                                | Sends a packet of 3, to where?<br>CATCH: The destination must be a part of the XPKT.               |             |
 |                          | XPKT Formatting: Must include destination                                                                                                              | Within the last range input. (cache0110) = 5                                               | XPRT reads 5, and sends the XPKT to EON Unit 5.                                                    |             |
 |        XPRT BUSES        | TABLE below                                                                                                                                            |                                                                                            |                                                                                                    |             |
-|                          | (r00) THREAD SHARE                                                                                                                                     | (r01) VRAM                                                                                 | (r10) PORT                                                                                         | (r11) @#    |
+|                          | (r00) THREADSHARE                                                                                                                                      | (r01) VRAM                                                                                 | (r10) PORT                                                                                         | (r11) @#    |
 |           JUMP           | JUMP is very useful. But we have more <br>than just one mode.                                                                                          | MODES below                                                                                |                                                                                                    |             |
 |                          | (00r) LOCAL Jump                                                                                                                                       | \[00]r\[@OPBITS]t\[Cache]<br>Jumps if Flags are TRUE. (@OPBITS) use ! to not<br>all flags. | @OPBITS: < \| = \| > \| 0 \| C \| !<br>r@OPBITSt 6b                                                |             |
 |                          | (01r) LIVE Jump                                                                                                                                        | \[01]r-\[VXID]t\[Cache]<br>Immediate VRTX Leap                                             | Sends RSM Fetch request and automatically leaps<br>to it when the VRTX is ready.                   |             |
@@ -55,27 +55,27 @@ anynamehere.VXBOOT = Emulator Boot - PACE INSTRUCTIONS
 |                          |                                                                                                                                                        |                                                                                            |                                                                                                    |             |
 |     EON Unit CONFIGS     | P00000001 = @#<br>P00000010 = @#<br>P00000100 = @#<br>P00001000 = @#<br>P00010000 = @#<br>P00100000 = @#<br>P01000000 = @#<br>P10000000 = VRTX LOOPING | uh..... pretty useless rn... so uh... yeah..                                               |                                                                                                    |             |
 
-| Rutreon |    NAME     | ASSEMBLY |    OPERAND     |          OPERAND MAPPING          |            MODE VALUES             | CAT NOTES 4 U           |
-| ------: | :---------: | :------: | :------------: | :-------------------------------: | :--------------------------------: | ----------------------- |
-|       0 |     NOP     |          |                |                                   |              00 -> 11              |                         |
-|       1 | WRITEGLOBAL |   WRTE   | 00r0000000000  |        \[Channel]r\[Data]         |                                    |                         |
-|      10 | READGLOBAL  |   READ   | 00r0000000000  |        \[Channel]r\[Data]         |                                    |                         |
-|      11 |    MECO     |   MECO   | 00r0000000000  |        \[Channel]r\[Data]         |                                    | See MECO Essential      |
-|     100 |  MECO-VARI  |   VMEC   |   00r-t0000    |       \[Mode]rt\[Variable]        |          Select \| Import          | See VMEC Very important |
-|     101 |    XPRT     |   XPRT   | 00r000000t0000 | \[Mode]r\[Bus]\[Cache0]t\[Cache1] |   SEND \| READ \| WAIT \| IMPORT   | See XPRT                |
-|     110 | ARITHMETIC  |   ARTH   | 00r0000000000  |          \[Mode]r\[Data]          |         + \| - \| << \| >>         |                         |
-|     111 | CARITHMETIC |   CART   |   00r-t0000    |         \[Mode]rt\[Cache]         |         + \| - \| << \| >>         | C-variant               |
-|    1000 |    LOGIC    |   LGIC   | 00r0000000000  |          \[Mode]r\[Data]          |      AND \| OR \| XOR \| NOT       |                         |
-|    1001 |   CLOGIC    |   CLGC   |   00r-t0000    |         \[Mode]rt\[Cache]         |      AND \| OR \| XOR \| NOT       | C-variant               |
-|    1010 |    FLAG     |   FLAG   | 00r0000000000  |          \[Mode]r\[Data]          |         = \| > \| < \| @#          |                         |
-|    1011 |    CFLAG    |   CFLG   |   00r-t0000    |         \[Mode]rt\[Cache]         |         = \| > \| < \| @#          | C-variant               |
-|    1100 |    JUMP     |   JUMP   |    00rt0000    |    \[Mode]r\[@OPBITS]t\[Cache]    | LOCAL \| LIVE \| ACCEPT \| REQUEST | See Jump & @OPBITS      |
-|    1101 |    SLEEP    |   SLEP   |   00r0-t0000   |       \[Mode]r\[See Sleep]        |  CYCLE \| PORT \| FLAG \| SETFLAG  | See Sleep               |
-|         |             |          |                |                                   |                                    |                         |
-|    PACE |    NAME     |          |                |                                   |                                    |                         |
-|  000000 |  EXITPACE   |          |                |                                   |                                    |                         |
-|   10000 | VRTXASSIGN  |          | 0000p0000e0000 |       \[EON ID]p-e\[VX ID]        |                                    |                         |
-|   10001 |  CONFUNIT   |          | 0000p00000000  |       \[EON ID]p\[@OPBITS]        |                                    | See @OPBITS             |
+| Rutreon |    NAME     | ASSEMBLY |    OPERAND     |                         OPERAND MAPPING                         |            MODE VALUES             | CAT NOTES 4 U           |
+| ------: | :---------: | :------: | :------------: | :-------------------------------------------------------------: | :--------------------------------: | ----------------------- |
+|       0 |     NOP     |          |                |                                                                 |              00 -> 11              |                         |
+|       1 | WRITEGLOBAL |   WRTE   |  r0000000000   |                            r\[Data]                             |                                    |                         |
+|      10 | READGLOBAL  |   READ   | 00r0000000000  |                       \[Channel]r\[Data]                        |                                    |                         |
+|      11 |    MECO     |   MECO   | 00r0000000000  |                       \[Channel]r\[Data]                        |                                    | See MECO Essential      |
+|     100 |  MECO-VARI  |   VMEC   |   00r-t0000    | \[SELECT]rt\[Variable]<br>ALT: \[IMPORT]r--\[Cache]t\[Variable] |          SELECT \| IMPORT          | See VMEC Very important |
+|     101 |    XPRT     |   XPRT   | 00r000000t0000 |   \[Mode]r\[Bus]\[Cache0]t\[Cache1]<br>ALT: \[Mode]rt\[Cache]   |   SEND \| READ \| WAIT \| IMPORT   | See XPRT                |
+|     110 | ARITHMETIC  |   ARTH   | 00r0000000000  |                         \[Mode]r\[Data]                         |         + \| - \| << \| >>         |                         |
+|     111 | CARITHMETIC |   CART   |   00r-t0000    |                        \[Mode]rt\[Cache]                        |         + \| - \| << \| >>         | C-variant               |
+|    1000 |    LOGIC    |   LGIC   | 00r0000000000  |                         \[Mode]r\[Data]                         |      AND \| OR \| XOR \| NOT       |                         |
+|    1001 |   CLOGIC    |   CLGC   |   00r-t0000    |                        \[Mode]rt\[Cache]                        |      AND \| OR \| XOR \| NOT       | C-variant               |
+|    1010 |    FLAG     |   FLAG   | 00r0000000000  |                         \[Mode]r\[Data]                         |         = \| > \| < \| @#          |                         |
+|    1011 |    CFLAG    |   CFLG   |   00r-t0000    |                        \[Mode]rt\[Cache]                        |         = \| > \| < \| @#          | C-variant               |
+|    1100 |    JUMP     |   JUMP   |    00rt0000    |  \[Mode]r\[@OPBITS]t\[Cache]<br>ALT: \[Mode]r-\[VXID]t\[Cache]  | LOCAL \| LIVE \| ACCEPT \| REQUEST | See Jump & @OPBITS      |
+|    1101 |    SLEEP    |   SLEP   |   00r0-t0000   |                      \[Mode]r\[See Sleep]                       |  CYCLE \| PORT \| FLAG \| SETFLAG  | See Sleep               |
+|         |             |          |                |                                                                 |                                    |                         |
+|    PACE |    NAME     |          |                |                                                                 |                                    |                         |
+|  000000 |  EXITPACE   |          |                |                                                                 |                                    |                         |
+|   10000 | VRTXASSIGN  |  $VXID   | 0000p0000e0000 |                      \[EON ID]p-e\[VX ID]                       |                                    |                         |
+|   10001 |  CONFUNIT   |          | 0000p00000000  |                      \[EON ID]p\[@OPBITS]                       |                                    | See @OPBITS             |
 
 
 ok now remind me to make the engineers documentation thx :D
