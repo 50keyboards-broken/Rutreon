@@ -663,6 +663,13 @@ fn TMU_RMEM_MUX(core: *ThreadUnit, lock:RMEMobject) void {
             switch (lock.DataAddress) {
                 0b0...0b1111011111 => {if (action) {RMEMbank2[lock.DataAddress] = lock.DataValue;} else {core.TMUReturnhandle = RMEMbank2[lock.DataAddress];}},
                 //0b1111100000...0b1111101110 => {if (action) {core.VRTX[bit4addr] = @intCast(lock.DataValue);} else {core.TMUReturnhandle = @intCast(core.VRTX[bit4addr]);}},
+                0b1111101111 => { // MECO LOOPBACK
+                    if (action) {
+                        core.COaddr = lock.DataValue; EMCOvalUpdate(undefined, core,  (@as(u12, core.COregion) << 10) | (@as(u12, core.COaddr)));
+                    } else {
+                        core.TMUReturnhandle = core.COaddr;
+                    }
+                },
                 0b1111110000...0b1111111111 => {if (action) {core.CACHE[bit4addr] = lock.DataValue;} else {core.TMUReturnhandle = core.CACHE[bit4addr];}},
                 else => {return;}
             }
